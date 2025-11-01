@@ -1,0 +1,99 @@
+import { createClient } from "@supabase/supabase-js"
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+const testUsers = [
+  {
+    email: "estudiante@test.com",
+    password: "Estudiante123!",
+    role: "estudiante",
+    nombre: "Juan",
+    apellido: "Pérez",
+    cedula: "1001234567",
+  },
+  {
+    email: "docente@test.com",
+    password: "Docente123!",
+    role: "docente",
+    nombre: "Dr. Roberto",
+    apellido: "Sánchez",
+    cedula: "2001234567",
+  },
+  {
+    email: "admin@test.com",
+    password: "Admin123!",
+    role: "admin",
+    nombre: "Admin",
+    apellido: "Sistema",
+    cedula: "3001234567",
+  },
+]
+
+async function createTestUsers() {
+  console.log("[v0] Creating test users...")
+
+  for (const user of testUsers) {
+    try {
+      // Create auth user
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: user.email,
+        password: user.password,
+        email_confirm: true,
+      })
+
+      if (authError) {
+        console.error(`[v0] Error creating auth user ${user.email}:`, authError)
+        continue
+      }
+
+      console.log(`[v0] Created auth user: ${user.email}`)
+
+      // Create auth_users record
+      const { error: authUserError } = await supabase.from("auth_users").insert([
+        {
+          id: authData.user.id,
+          email: user.email,
+          role: user.role,
+          validado: true,
+          estado: "activo",
+        },
+      ])
+
+      if (authUserError) {
+        console.error(`[v0] Error creating auth_users record:`, authUserError)
+        continue
+      }
+
+      // Create personas record
+      const { error: personaError } = await supabase.from("personas").insert([
+        {
+          auth_id: authData.user.id,
+          nombre: user.nombre,
+          apellido: user.apellido,
+          email: user.email,
+          cedula: user.cedula,
+          tipo: user.role === "docente" ? "profesor" : user.role,
+          estado: "activo",
+          role: user.role,
+        },
+      ])
+
+      if (personaError) {
+        console.error(`[v0] Error creating personas record:`, personaError)
+        continue
+      }
+
+      console.log(`[v0] Successfully created user: ${user.email} (${user.role})`)
+    } catch (error) {
+      console.error(`[v0] Unexpected error for ${user.email}:`, error)
+    }
+  }
+
+  console.log("[v0] Test users creation completed!")
+}
+
+createTestUsers().catch(console.error)
+
