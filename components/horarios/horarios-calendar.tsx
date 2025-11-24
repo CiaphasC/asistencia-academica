@@ -14,7 +14,7 @@ interface Horario {
   dia_semana: number
   hora_inicio: string
   hora_fin: string
-  periodo_academico: string
+  periodo_academico?: string
   cursos?: {
     nombre: string
     codigo: string
@@ -53,7 +53,7 @@ export function HorariosCalendar({ initialHorarios }: HorariosCalendarProps) {
   const [viewMode, setViewMode] = React.useState<"week" | "list">("week")
   const [selectedPeriodo, setSelectedPeriodo] = React.useState<string>("todos")
 
-  const periodos = Array.from(new Set(horarios.map((h) => h.periodo_academico)))
+  const periodos = Array.from(new Set(horarios.map((h) => h.periodo_academico))).filter(Boolean)
 
   const filteredHorarios =
     selectedPeriodo === "todos" ? horarios : horarios.filter((h) => h.periodo_academico === selectedPeriodo)

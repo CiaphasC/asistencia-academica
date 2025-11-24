@@ -31,7 +31,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
-      <body className="font-sans antialiased">
+      {/* suppressHydrationWarning evita errores si el navegador/extensiones agregan clases dinámicas al <body> */}
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <Suspense fallback={<div>Loading...</div>}>
             {children}

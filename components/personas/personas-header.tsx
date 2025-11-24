@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { PersonaDialog } from "./persona-dialog"
 
-export function PersonasHeader() {
+interface PersonasHeaderProps {
+  canManage?: boolean
+}
+
+export function PersonasHeader({ canManage = false }: PersonasHeaderProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
   return (
@@ -19,10 +23,14 @@ export function PersonasHeader() {
         </div>
         <p className="text-muted-foreground text-lg">Administra estudiantes, profesores y personal académico</p>
       </div>
-      <Button size="lg" onClick={() => setIsDialogOpen(true)} className="rounded-xl">
-        Agregar Persona
-      </Button>
-      <PersonaDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      {canManage && (
+        <>
+          <Button size="lg" onClick={() => setIsDialogOpen(true)} className="rounded-xl">
+            Agregar Persona
+          </Button>
+          <PersonaDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+        </>
+      )}
     </div>
   )
 }

@@ -34,9 +34,10 @@ interface Persona {
 
 interface PersonasTableProps {
   initialPersonas: Persona[]
+  canManage?: boolean
 }
 
-export function PersonasTable({ initialPersonas }: PersonasTableProps) {
+export function PersonasTable({ initialPersonas, canManage = false }: PersonasTableProps) {
   const [personas, setPersonas] = React.useState<Persona[]>(initialPersonas)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [filterTipo, setFilterTipo] = React.useState<string>("todos")
@@ -149,18 +150,18 @@ export function PersonasTable({ initialPersonas }: PersonasTableProps) {
       <Card>
         <Table>
           <TableHeader>
+          <TableRow>
+            <TableHead>Nombre</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Documento</TableHead>
+            <TableHead>Tipo</TableHead>
+            <TableHead>Estado</TableHead>
+            {canManage && <TableHead className="text-right">Acciones</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filteredPersonas.length === 0 ? (
             <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Documento</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPersonas.length === 0 ? (
-              <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No se encontraron personas
                 </TableCell>
@@ -183,27 +184,29 @@ export function PersonasTable({ initialPersonas }: PersonasTableProps) {
                       {persona.estado}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => handleEdit(persona)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(persona.id)} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleEdit(persona)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDelete(persona.id)} className="text-destructive">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

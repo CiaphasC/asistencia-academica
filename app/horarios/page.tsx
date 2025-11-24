@@ -11,8 +11,11 @@ export default async function HorariosPage() {
     .select(
       `
       *,
-      cursos(nombre, codigo),
-      personas(nombre, apellido)
+      cursos(
+        nombre, 
+        codigo,
+        docente:personas(nombre, apellido)
+      )
     `,
     )
     .eq("estado", "activo")

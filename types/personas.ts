@@ -1,10 +1,18 @@
+export interface Role {
+  id: string
+  name: string
+  description?: string
+}
+
 export interface PersonaBasic {
   id?: string
   nombre: string
   apellido: string
   email: string
   cedula?: string | null
-  role?: string
+  role?: string // Deprecated
+  role_id?: string
+  roles?: Role
 }
 
 export interface SolicitudValidacion {

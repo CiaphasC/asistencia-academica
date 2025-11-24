@@ -34,6 +34,7 @@ export function EventoDetailsDialog({ open, onOpenChange, evento }: EventoDetail
   const [isLoading, setIsLoading] = React.useState(false)
   const [isRegistering, setIsRegistering] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [publicLink, setPublicLink] = React.useState<string>("")
   const [formData, setFormData] = React.useState({
     nombre: "",
     email: "",
@@ -44,6 +45,9 @@ export function EventoDetailsDialog({ open, onOpenChange, evento }: EventoDetail
   React.useEffect(() => {
     if (open && evento) {
       loadParticipantes()
+      if (typeof window !== "undefined" && evento?.enlace_publico) {
+        setPublicLink(`${window.location.origin}/eventos/registro/${evento.enlace_publico}`)
+      }
     }
   }, [open, evento])
 
@@ -93,14 +97,17 @@ export function EventoDetailsDialog({ open, onOpenChange, evento }: EventoDetail
   }
 
   const copyPublicLink = () => {
-    const link = `${window.location.origin}/eventos/registro/${evento.enlace_publico}`
-    navigator.clipboard.writeText(link)
+    if (!publicLink) return
+    navigator.clipboard.writeText(publicLink)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const formatDate = (date: string) => {
-    return format(new Date(date), "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return "Fecha no disponible"
+    const parsed = new Date(date)
+    if (isNaN(parsed.getTime())) return "Fecha no disponible"
+    return format(parsed, "d 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })
   }
 
   return (
@@ -201,12 +208,8 @@ export function EventoDetailsDialog({ open, onOpenChange, evento }: EventoDetail
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      value={`${window.location.origin}/eventos/registro/${evento?.enlace_publico}`}
-                      className="text-xs"
-                    />
-                    <Button size="sm" variant="outline" onClick={copyPublicLink}>
+                    <Input readOnly value={publicLink} className="text-xs" placeholder="Enlace no disponible" />
+                    <Button size="sm" variant="outline" onClick={copyPublicLink} disabled={!publicLink}>
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>

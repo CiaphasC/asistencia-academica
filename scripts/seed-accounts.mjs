@@ -1,20 +1,30 @@
 import { createClient } from "@supabase/supabase-js"
+import fs from "fs"
+import path from "path"
 
-function enforceEnv(name) {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`)
-  }
-  return value
+// Load env vars manually
+const envPath = path.resolve(process.cwd(), ".env.local")
+if (fs.existsSync(envPath)) {
+  const envConfig = fs.readFileSync(envPath, "utf8")
+  envConfig.split("\n").forEach((line) => {
+    const [key, value] = line.split("=")
+    if (key && value) {
+      process.env[key.trim()] = value.trim()
+    }
+  })
 }
 
-const SUPABASE_URL = enforceEnv("NEXT_PUBLIC_SUPABASE_URL")
-const SUPABASE_SERVICE_KEY = enforceEnv("SUPABASE_SERVICE_ROLE_KEY")
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+if (!supabaseUrl || !serviceRoleKey) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.")
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
-    autoRefreshToken: false,
     persistSession: false,
+    autoRefreshToken: false,
   },
 })
 
@@ -104,6 +114,21 @@ const teacherCourseRotation = [
   "ISW-204",
 ]
 
+const adminUser = {
+  role: "admin",
+  tipo: "administrador",
+  nombre: "Administrador",
+  apellido: "Principal",
+  email: "admin@sistema.demo",
+  password: "Admin123!",
+  cedula: "3000000001",
+  telefono: "+593900000000",
+  direccion: "Oficina Central 1",
+  fecha_nacimiento: "1980-01-15",
+  genero: "M",
+  cursos: [],
+}
+
 function slugify(value) {
   return value
     .toLowerCase()
@@ -114,6 +139,7 @@ function slugify(value) {
 
 function buildStudents() {
   const students = []
+
   for (let i = 0; i < 40; i++) {
     const first = studentFirstNames[i % studentFirstNames.length]
     const last = studentLastNames[Math.floor(i / studentFirstNames.length)]
@@ -124,8 +150,8 @@ function buildStudents() {
     const telefono = `+5939${String(80000000 + i).padStart(8, "0")}`
     const direccion = `Calle ${i + 1} de Octubre`
     const birthYear = 2001 - (i % 6)
-    const birthMonth = ((i % 12) + 1).toString().padStart(2, "0")
-    const birthDay = ((i % 26) + 1).toString().padStart(2, "0")
+    const birthMonth = String((i % 12) + 1).padStart(2, "0")
+    const birthDay = String((i % 26) + 1).padStart(2, "0")
     const birthdate = `${birthYear}-${birthMonth}-${birthDay}`
     const genero = i % 2 === 0 ? "F" : "M"
     const carrera = i < 20 ? "Ingeniería de Software" : "Administración de Empresas"
@@ -147,6 +173,7 @@ function buildStudents() {
       cursos: courseCodes,
     })
   }
+
   return students
 }
 
@@ -159,8 +186,8 @@ function buildTeachers() {
     const telefono = `+5938${String(60000000 + index).padStart(8, "0")}`
     const direccion = `Avenida Docente ${index + 1}`
     const birthYear = 1985 - (index % 10)
-    const birthMonth = ((index % 12) + 1).toString().padStart(2, "0")
-    const birthDay = ((index % 20) + 1).toString().padStart(2, "0")
+    const birthMonth = String((index % 12) + 1).padStart(2, "0")
+    const birthDay = String((index % 20) + 1).padStart(2, "0")
     const birthdate = `${birthYear}-${birthMonth}-${birthDay}`
     const genero = index % 2 === 0 ? "M" : "F"
     return {
@@ -181,10 +208,10 @@ function buildTeachers() {
 }
 
 async function waitForPersona(authId) {
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 15; attempt++) {
     const { data, error } = await supabase.from("personas").select("id").eq("auth_id", authId).maybeSingle()
     if (error) {
-      console.error("Error buscando persona:", error)
+      console.error("Error fetching persona:", error)
       break
     }
     if (data?.id) {
@@ -198,67 +225,87 @@ async function waitForPersona(authId) {
 async function ensureAccount(userData) {
   const { email, password, role, tipo, nombre, apellido, cedula } = userData
 
-  const existingLookup = await supabase.auth.admin.getUserByEmail(email)
-  let authUserId = existingLookup.data?.user?.id ?? null
+  let authUserId = null
+  let wasCreated = false
 
-  if (!authUserId) {
-    const createResult = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        role,
-        nombre,
-        apellido,
-        cedula,
-        tipo,
-      },
-    })
+  // Try to create user first
+  const createResult = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      role,
+      tipo,
+      nombre,
+      apellido,
+      cedula,
+    },
+  })
 
-    if (createResult.error) {
-      throw createResult.error
+  if (createResult.data.user) {
+    authUserId = createResult.data.user.id
+    wasCreated = true
+  } else if (createResult.error && createResult.error.message.includes("already registered")) {
+    // User exists, find ID
+    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    if (listError) throw listError
+    const existingUser = users.find(u => u.email === email)
+    if (existingUser) {
+      authUserId = existingUser.id
     }
-
-    authUserId = createResult.data.user?.id ?? null
+  } else {
+    throw createResult.error
   }
 
   if (!authUserId) {
-    throw new Error(`No se pudo obtener el ID para el usuario ${email}`)
+    throw new Error(`No se pudo obtener el ID de auth para ${email}`)
   }
 
   const personaId = await waitForPersona(authUserId)
 
   if (!personaId) {
-    throw new Error(`No se encontró el registro en personas para ${email}`)
+    throw new Error(`No se encontró la persona para ${email}`)
   }
 
   const now = new Date().toISOString()
 
-  const personaPayload = {
-    estado: "activo",
-    validado: true,
-    fecha_validacion: now,
-    telefono: userData.telefono,
-    direccion: userData.direccion,
-    fecha_nacimiento: userData.fecha_nacimiento,
-    genero: userData.genero,
-  }
+  const personaUpdate = await supabase
+    .from("personas")
+    .update({
+      telefono: userData.telefono,
+      direccion: userData.direccion,
+      fecha_nacimiento: userData.fecha_nacimiento,
+      genero: userData.genero,
+      validado: true,
+      estado: "activo",
+      fecha_validacion: now,
+    })
+    .eq("id", personaId)
 
-  const personaUpdate = await supabase.from("personas").update(personaPayload).eq("id", personaId)
   if (personaUpdate.error) {
-    console.error("Error actualizando persona:", personaUpdate.error)
+    console.error("Error actualizando personas:", personaUpdate.error)
   }
 
   const authUpdate = await supabase
     .from("auth_users")
-    .update({ validado: true, estado: "activo", razon_rechazo: null })
-    .eq("id", authUserId)
+    .upsert(
+      {
+        id: authUserId,
+        email,
+        role,
+        validado: true,
+        estado: "activo",
+        razon_rechazo: null,
+        updated_at: now,
+      },
+      { onConflict: "id" },
+    )
 
   if (authUpdate.error) {
     console.error("Error actualizando auth_users:", authUpdate.error)
   }
 
-  if (role === "docente" || role === "admin") {
+  if (role === "docente") {
     const solicitudUpdate = await supabase
       .from("solicitudes_validacion")
       .update({ estado: "aprobado", fecha_resolucion: now, motivo_rechazo: null })
@@ -266,16 +313,16 @@ async function ensureAccount(userData) {
       .eq("estado", "pendiente")
 
     if (solicitudUpdate.error) {
-      console.error("Error actualizando solicitud de validación:", solicitudUpdate.error)
+      console.error("Error actualizando solicitud:", solicitudUpdate.error)
     }
   }
 
-  return { authUserId, personaId }
+  return { authUserId, personaId, wasCreated }
 }
 
-async function ensureMatriculas(personaId, cursoIds) {
-  if (!cursoIds.length) return
-  const payload = cursoIds.map((cursoId) => ({
+async function ensureMatriculas(personaId, cursosIds) {
+  if (!cursosIds.length) return
+  const payload = cursosIds.map((cursoId) => ({
     estudiante_id: personaId,
     curso_id: cursoId,
     periodo_academico: "2025-I",
@@ -287,13 +334,13 @@ async function ensureMatriculas(personaId, cursoIds) {
   })
 
   if (error) {
-    console.error("Error insertando matrículas:", error)
+    console.error("Error upsert matriculas:", error)
   }
 }
 
-async function assignCourseTeachers(courseAssignments, courseMap) {
+async function assignCourseTeachers(assignments, courseMap) {
   const updated = new Set()
-  for (const assignment of courseAssignments) {
+  for (const assignment of assignments) {
     if (updated.has(assignment.course)) continue
     const cursoId = courseMap.get(assignment.course)
     if (!cursoId) continue
@@ -305,54 +352,37 @@ async function assignCourseTeachers(courseAssignments, courseMap) {
   }
 }
 
-const adminUser = {
-  role: "admin",
-  tipo: "administrador",
-  nombre: "Administrador",
-  apellido: "Principal",
-  email: "admin@sistema.demo",
-  password: "Admin123!",
-  cedula: "3000000001",
-  telefono: "+593900000000",
-  direccion: "Oficina Central 1",
-  fecha_nacimiento: "1980-01-15",
-  genero: "M",
-  cursos: [],
-}
-
 async function main() {
-  console.log("Preparando catálogo de cursos...")
   const { data: cursos, error: cursosError } = await supabase.from("cursos").select("id, codigo")
   if (cursosError) {
     throw cursosError
   }
-  const courseMap = new Map(cursos.map((curso) => [curso.codigo, curso.id]))
 
+  const courseMap = new Map(cursos.map((curso) => [curso.codigo, curso.id]))
   for (const code of allCourseCodes) {
     if (!courseMap.has(code)) {
-      throw new Error(`No se encontró el curso con código ${code}. Ejecuta las migraciones antes de sembrar los datos.`)
+      throw new Error(`No se encontró el curso con código ${code}. Ejecuta las migraciones antes del seed.`)
     }
   }
 
   const students = buildStudents()
   const teachers = buildTeachers()
 
-  console.log("Creando/actualizando cuenta administradora...")
+  console.log("Creando/actualizando admin...")
   try {
-    await ensureAccount(adminUser)
-    console.log("  ✔ Admin: admin@sistema.demo")
+    const { wasCreated } = await ensureAccount(adminUser)
+    console.log(wasCreated ? "  ✔ Admin creado" : "  ℹ Admin ya existía")
   } catch (error) {
     console.error("  ✖ Error creando admin:", error)
   }
 
   console.log(`Creando/actualizando ${students.length} estudiantes...`)
-
   for (const [index, student] of students.entries()) {
     try {
-      const { personaId } = await ensureAccount(student)
-      const cursoIds = student.cursos.map((code) => courseMap.get(code)).filter(Boolean)
+      const { wasCreated, personaId } = await ensureAccount(student)
+      console.log(`  ✔ Estudiante ${index + 1}/${students.length}: ${student.email}${wasCreated ? "" : " (actualizado)"}`)
+      const cursoIds = student.cursos.map((code) => courseMap.get(code)).filter((id) => Boolean(id))
       await ensureMatriculas(personaId, cursoIds)
-      console.log(`  ✔ Estudiante ${index + 1}/${students.length}: ${student.email}`)
     } catch (error) {
       console.error(`  ✖ Error con estudiante ${student.email}:`, error)
     }
@@ -363,19 +393,18 @@ async function main() {
 
   for (const [index, teacher] of teachers.entries()) {
     try {
-      const courseCode = teacher.cursos[0]
-      const { personaId } = await ensureAccount(teacher)
-      docenteAssignments.push({ course: courseCode, personaId })
-      console.log(`  ✔ Docente ${index + 1}/${teachers.length}: ${teacher.email} -> ${courseCode}`)
+      const { wasCreated, personaId } = await ensureAccount(teacher)
+      docenteAssignments.push({ course: teacher.cursos[0], personaId })
+      console.log(`  ✔ Docente ${index + 1}/${teachers.length}: ${teacher.email}${wasCreated ? "" : " (actualizado)"}`)
     } catch (error) {
       console.error(`  ✖ Error con docente ${teacher.email}:`, error)
     }
   }
 
-  console.log("Asignando docentes principales a los cursos...")
+  console.log("Asignando docentes a cursos...")
   await assignCourseTeachers(docenteAssignments, courseMap)
 
-  console.log("Siembra completa. Recuerda ejecutar nuevamente si agregas nuevas carreras o cursos.")
+  console.log("Seed completado. Puedes iniciar sesión con los usuarios generados.")
 }
 
 main()
@@ -384,6 +413,6 @@ main()
     process.exit(0)
   })
   .catch((error) => {
-    console.error(error)
+    console.error("Seed falló:", error)
     process.exit(1)
   })

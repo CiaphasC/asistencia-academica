@@ -71,9 +71,10 @@ export async function fetchSolicitudesPendientesAdmin(): Promise<{
     return { userRole: null, solicitudes: [] }
   }
 
-  const { data: profile } = await supabase.from("auth_users").select("role").eq("id", user.id).maybeSingle()
+  const { data: profile } = await supabase.from("auth_users").select("role, roles(name)").eq("id", user.id).maybeSingle()
 
-  const role = profile?.role ?? null
+  // @ts-ignore
+  const role = profile?.roles?.name ?? profile?.role ?? null
 
   if (role !== "admin") {
     return { userRole: role, solicitudes: [] }
@@ -82,7 +83,7 @@ export async function fetchSolicitudesPendientesAdmin(): Promise<{
   const { data, error } = await supabase
     .from("solicitudes_validacion")
     .select(
-      "id, persona_id, tipo_solicitud, estado, motivo_rechazo, fecha_solicitud, fecha_resolucion, personas(id, nombre, apellido, email, cedula, role)",
+      "id, persona_id, tipo_solicitud, estado, motivo_rechazo, fecha_solicitud, fecha_resolucion, personas(id, nombre, apellido, email, cedula, role, roles(name))",
     )
     .eq("estado", "pendiente")
     .order("fecha_solicitud", { ascending: true })
@@ -107,7 +108,8 @@ export async function fetchSolicitudesPendientesAdmin(): Promise<{
         apellido: item.personas?.apellido ?? "",
         email: item.personas?.email ?? "",
         cedula: item.personas?.cedula ?? null,
-        role: item.personas?.role,
+        // @ts-ignore
+        role: item.personas?.roles?.name ?? item.personas?.role,
       },
     })) ?? []
 

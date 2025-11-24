@@ -8,7 +8,7 @@ import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { AlertCircle, ArrowLeft, BookOpen, Lock, Mail, User } from "lucide-react"
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { loginAction } from "@/app/auth/actions"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -43,55 +43,32 @@ export default function LoginPage() {
     setGlobalError(null)
     setIsLoading(true)
 
-    const supabase = getSupabaseBrowserClient()
-
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: values.email,
-        password: values.password,
-      })
+      const formData = new FormData()
+      formData.append("email", values.email)
+      formData.append("password", values.password)
+      formData.append("role", values.role)
 
-      if (authError) throw authError
-      if (!data.user) throw new Error("Error al iniciar sesión")
+      const result = await loginAction(null, formData)
 
-      const { data: authUser, error: authUserError } = await supabase
-        .from("auth_users")
-        .select("role, validado, estado")
-        .eq("id", data.user.id)
-        .single()
-
-      if (authUserError) throw authUserError
-
-      if (authUser.role !== values.role) {
-        await supabase.auth.signOut()
-        setGlobalError(`Esta cuenta está registrada como ${authUser.role}, no como ${values.role}.`)
-        return
+      if (result?.message) {
+        setGlobalError(result.message)
+        if (result.error) {
+          // Optional: map field errors back to form if needed
+          console.error("Validation errors:", result.error)
+        }
       }
-
-      if (!authUser.validado) {
-        await supabase.auth.signOut()
-        setGlobalError("Tu cuenta está pendiente de validación. Un administrador la revisará pronto.")
-        return
-      }
-
-      if (authUser.estado !== "activo") {
-        await supabase.auth.signOut()
-        setGlobalError("Tu cuenta no está activa. Contacta al administrador.")
-        return
-      }
-
-      router.push("/")
+      // If no message, it means redirect happened (or will happen)
     } catch (error) {
       console.error("[v0] Login error:", error)
-      const message = error instanceof Error ? error.message : "Error al iniciar sesión"
-      setGlobalError(message)
+      setGlobalError("Ocurrió un error inesperado.")
     } finally {
       setIsLoading(false)
     }
   })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted to-background flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+    <div className="min-h-screen bg-linear-to-br from-background via-muted to-background flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-20 right-10 w-72 h-72 bg-accent/10 rounded-full blur-3xl animate-pulse delay-1000" />
@@ -121,7 +98,7 @@ export default function LoginPage() {
               <form onSubmit={onSubmit} className="space-y-5 sm:space-y-6">
                 {globalError && (
                   <div className="flex gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg animate-in shake duration-300">
-                    <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     <p className="text-xs sm:text-sm text-destructive">{globalError}</p>
                   </div>
                 )}
